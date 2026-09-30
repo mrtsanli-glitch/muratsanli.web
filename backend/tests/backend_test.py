@@ -22,7 +22,10 @@ def test_dashboard_shape(client):
     data = response.json()
     assert isinstance(data["accounts"], list)
     assert isinstance(data["transactions"], list)
-    assert {"balance", "income", "expense", "pending", "pending_count"} <= data["summary"].keys()
+    assert {"balance", "income", "expense", "pending", "pending_count", "receivable", "payable"} <= data["summary"].keys()
+    assert isinstance(data["contacts"], list)
+    assert isinstance(data["summary"]["receivable"], (int, float))
+    assert isinstance(data["summary"]["payable"], (int, float))
 
 
 def test_accounts_endpoint(client):
@@ -121,3 +124,155 @@ def test_csv_import(client):
     )
     assert response.status_code == 200
     assert response.json()["created"] == 1
+
+
+# ---------- Accounts CRUD ----------
+def test_account_create_patch_rename_cascade_and_delete(client):
+    unique = uuid.uuid4().hex[:8]
+    name = f"TEST_acc_{unique}"
+    create = client.post(f"{BASE_URL}/api/accounts", json={
+        "name": name, "type": "Banka", "currency": "TRY", "balance": 1000, "color": "blue",
+    })
+    assert create.status_code == 200
+    acc = create.json()
+    assert acc["name"] == name and acc["balance"] == 1000
+
+    # verify GET
+    listed = client.get(f"{BASE_URL}/api/accounts").json()
+    assert any(a["id"] == acc["id"] for a in listed)
+
+    # Create a transaction referencing this account
+    tx = client.post(f"{BASE_URL}/api/transactions", json={
+        "kind": "income", "title": f"TEST_tx_{unique}", "category": "Satış",
+        "amount": 500, "currency": "TRY", "account": name,
+        "due_date": date.today().isoformat(), "status": "Tamamlandı",
+    })
+    assert tx.status_code == 200
+    tx_id = tx.json()["id"]
+
+    # PATCH rename should cascade to transactions
+    new_name = f"TEST_acc_{unique}_renamed"
+    patch = client.patch(f"{BASE_URL}/api/accounts/{acc['id']}", json={"name": new_name, "balance": 2500})
+    assert patch.status_code == 200
+    body = patch.json()
+    assert body["name"] == new_name and body["balance"] == 2500
+
+    # verify tx.account got renamed
+    all_tx = client.get(f"{BASE_URL}/api/transactions").json()
+    renamed_tx = next(t for t in all_tx if t["id"] == tx_id)
+    assert renamed_tx["account"] == new_name
+
+    # cleanup
+    client.delete(f"{BASE_URL}/api/transactions/{tx_id}")
+    deleted = client.delete(f"{BASE_URL}/api/accounts/{acc['id']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["ok"] is True
+    # 404 on second delete
+    assert client.delete(f"{BASE_URL}/api/accounts/{acc['id']}").status_code == 404
+
+
+def test_account_patch_not_found(client):
+    resp = client.patch(f"{BASE_URL}/api/accounts/does-not-exist", json={"name": "x"})
+    assert resp.status_code == 404
+
+
+# ---------- Contacts CRUD ----------
+def test_contact_full_crud(client):
+    unique = uuid.uuid4().hex[:8]
+    payload = {
+        "name": f"TEST_contact_{unique}", "type": "Müşteri", "balance": 1500.5,
+        "currency": "TRY", "due_date": date.today().isoformat(),
+        "phone": "+90 555 000 0000", "email": "test@example.com",
+    }
+    created = client.post(f"{BASE_URL}/api/contacts", json=payload)
+    assert created.status_code == 200
+    c = created.json()
+    for k in ("id", "name", "type", "balance", "currency", "due_date", "phone", "email"):
+        assert k in c
+    assert c["name"] == payload["name"] and c["balance"] == 1500.5
+
+    listed = client.get(f"{BASE_URL}/api/contacts")
+    assert listed.status_code == 200
+    assert any(x["id"] == c["id"] for x in listed.json())
+
+    patched = client.patch(f"{BASE_URL}/api/contacts/{c['id']}", json={"balance": -750, "type": "Tedarikçi"})
+    assert patched.status_code == 200
+    assert patched.json()["balance"] == -750
+    assert patched.json()["type"] == "Tedarikçi"
+    # unchanged fields intact
+    assert patched.json()["name"] == payload["name"]
+
+    deleted = client.delete(f"{BASE_URL}/api/contacts/{c['id']}")
+    assert deleted.status_code == 200
+    assert client.delete(f"{BASE_URL}/api/contacts/{c['id']}").status_code == 404
+
+
+def test_contact_patch_not_found(client):
+    resp = client.patch(f"{BASE_URL}/api/contacts/does-not-exist", json={"name": "x"})
+    assert resp.status_code == 404
+
+
+# ---------- Aging report ----------
+def test_aging_report_structure_and_buckets(client):
+    resp = client.get(f"{BASE_URL}/api/reports/aging")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert {"rows", "receivable", "payable"} <= data.keys()
+    for section in ("receivable", "payable"):
+        assert {"overdue", "d0_7", "d8_30", "d30_plus"} <= data[section].keys()
+    # Rows should contain expected keys
+    if data["rows"]:
+        row = data["rows"][0]
+        assert {"id", "name", "type", "balance", "currency", "due_date", "days", "bucket"} <= row.keys()
+
+
+def test_aging_report_reflects_created_contact_buckets(client):
+    unique = uuid.uuid4().hex[:8]
+    # overdue receivable
+    r_od = client.post(f"{BASE_URL}/api/contacts", json={
+        "name": f"TEST_ag_od_{unique}", "type": "Müşteri", "balance": 1000,
+        "due_date": (date.today().fromordinal(date.today().toordinal() - 5)).isoformat(),
+    }).json()
+    # d0_7 receivable
+    r_7 = client.post(f"{BASE_URL}/api/contacts", json={
+        "name": f"TEST_ag_7_{unique}", "type": "Müşteri", "balance": 200,
+        "due_date": (date.today().fromordinal(date.today().toordinal() + 3)).isoformat(),
+    }).json()
+    # d30_plus payable
+    p_30 = client.post(f"{BASE_URL}/api/contacts", json={
+        "name": f"TEST_ag_30_{unique}", "type": "Tedarikçi", "balance": -500,
+        "due_date": (date.today().fromordinal(date.today().toordinal() + 45)).isoformat(),
+    }).json()
+    try:
+        report = client.get(f"{BASE_URL}/api/reports/aging").json()
+        buckets_by_name = {r["name"]: r["bucket"] for r in report["rows"]}
+        assert buckets_by_name[r_od["name"]] == "overdue"
+        assert buckets_by_name[r_7["name"]] == "d0_7"
+        assert buckets_by_name[p_30["name"]] == "d30_plus"
+        assert report["receivable"]["overdue"] >= 1000
+        assert report["receivable"]["d0_7"] >= 200
+        assert report["payable"]["d30_plus"] >= 500
+    finally:
+        for cid in (r_od["id"], r_7["id"], p_30["id"]):
+            client.delete(f"{BASE_URL}/api/contacts/{cid}")
+
+
+# ---------- CSV Exports ----------
+def test_export_cashflow_csv(client):
+    resp = client.get(f"{BASE_URL}/api/reports/export/cashflow")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers.get("content-type", "")
+    assert resp.content.startswith(b"\xef\xbb\xbf")  # UTF-8 BOM
+    text = resp.content.decode("utf-8-sig")
+    header = text.splitlines()[0]
+    assert "Tarih" in header and "Tutar" in header
+
+
+def test_export_aging_csv(client):
+    resp = client.get(f"{BASE_URL}/api/reports/export/aging")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers.get("content-type", "")
+    assert resp.content.startswith(b"\xef\xbb\xbf")
+    text = resp.content.decode("utf-8-sig")
+    header = text.splitlines()[0]
+    assert "Cari" in header and "Segment" in header

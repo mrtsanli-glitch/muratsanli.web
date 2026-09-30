@@ -1,0 +1,57 @@
+{
+  "summary": "Completed public API regression and responsive UI testing for dashboard, navigation, transaction CRUD, CSV import, currency selector, calendar, and reports.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Calendar",
+        "issue": "Calendar heading is hardcoded to Mart 2025 and previous/next month buttons have no handlers; pending API transactions are from September/October 2026 but are displayed on March day numbers.",
+        "selector": "[data-testid='previous-month-button'], [data-testid='next-month-button'], .calendar-header h2",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Dashboard financial summary",
+        "issue": "Bu Ay Gelir and Bu Ay Gider cards use hardcoded report values rather than current transaction data; account balance is not recalculated after transaction create/delete.",
+        "affected_selectors": ["[data-testid='stat-bu-ay-gelir']", "[data-testid='stat-bu-ay-gider']", "[data-testid='stat-toplam-bakiye']"]
+      },
+      {
+        "flow": "Reports",
+        "issue": "Monthly report series is intentionally demo/static data (confirmed in backend implementation); this is MOCKED and should be labeled or computed from stored transactions for live reporting.",
+        "affected_selectors": ["[data-testid='cashflow-report-button']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Make calendar month state derive from current date and implement previous/next navigation; match events by year and month, not day number alone.",
+    "Compute dashboard monthly income/expense and balance from persisted transactions/accounts, or clearly label demo values.",
+    "Replace or clearly label the MOCKED monthly reports series and add a visible report result flow if report buttons are intended to work."
+  ],
+  "critical_code_review_comments": [
+    "Transaction create/delete only changes the transaction collection; account balances and dashboard balance are never reconciled, so real-time cash flow/account balance requirements are not met.",
+    "Calendar matches pending transactions by day-of-month only and hardcodes March 2025, which can place events in the wrong month/year."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_1.json"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5)",
+    "frontend": "100% for exercised core flows; known logic gaps reported"
+  },
+  "seed_data_creation": "Created temporary TEST_ and UI CSV transactions during API/UI tests and deleted all of them; seeded demo records were not modified.",
+  "retest_needed": true,
+  "should_call_test_agent_after_fix": true,
+  "context_for_next_testing_agent": "Dashboard, navigation, transaction modal CRUD, CSV control, currency selector, calendar rendering, reports route, and mobile viewport were exercised. Re-test calendar month navigation/date matching and dashboard figures after fixes. Monthly report series remains MOCKED by design.",
+  "rca of the issue": "The calendar component hardcodes 'Mart 2025' and finds events with only getDate(), while server seed dates use date.today(); this creates a month/year mismatch. Dashboard cards hardcode 209600/53650 and the backend dashboard balance sums accounts without transaction reconciliation, so mutation results do not drive all displayed financial totals."
+}

@@ -1,0 +1,50 @@
+{
+  "app_name": "FinansMaster - Modern Finans Yönetim Uygulaması",
+  "app_type": "dashboard",
+  "archetype": "ORGANIC & EARTHY / FINTECH MODERN",
+  "color_palette": {
+    "primary": "#0F172A",
+    "secondary": "#334155",
+    "accent": "#059669",
+    "accent_hover": "#047857",
+    "background": "#F8FAFC",
+    "card_background": "#FFFFFF",
+    "border": "#E2E8F0",
+    "text_main": "#0F172A",
+    "text_muted": "#64748B",
+    "success": "#10B981",
+    "danger": "#EF4444",
+    "warning": "#F59E0B"
+  },
+  "typography": {
+    "heading_font": "Plus Jakarta Sans, sans-serif",
+    "body_font": "Inter, sans-serif",
+    "mono_font": "JetBrains Mono, monospace"
+  },
+  "visual_enhancers": {
+    "border_radius": "rounded-xl",
+    "card_style": "flat rectangular with subtle 1px border and soft hover lift",
+    "shadows": "shadow-[0_4px_20px_rgba(0,0,0,0.03)]",
+    "glassmorphism": "backdrop-blur-xl bg-white/80 border border-slate-200/60"
+  },
+  "grids": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-4 lg:grid-cols-12 gap-6"
+  },
+  "layouts": {
+    "sidebar_navigation": "Fixed sidebar on desktop, collapsible on mobile with crystal glass header",
+    "container_padding": "p-6 md:p-8"
+  },
+  "motion": {
+    "transitions": "transition-all duration-200 ease-in-out",
+    "hover_lift": "hover:-translate-y-0.5 hover:shadow-lg"
+  },
+  "accessibility": {
+    "contrast_ratio": "WCAG AA minimum, high contrast badges for status",
+    "focus_states": "focus:ring-2 focus:ring-emerald-500 focus:outline-none",
+    "data_testids_required": true
+  },
+  "media": {},
+  "3d_libraries": {},
+  "image_urls": {},
+  "instructions_to_main_agent": "Build a modern, lightning-fast financial management dashboard in React/Tailwind/FastAPI supporting multi-currency (₺, $, €), bank accounts, income/expense tracking, upcoming payables/receivables calendar, cash flow reports, category analysis, CSV/Excel import, and demo data / empty state toggles. Ensure all buttons and interactive elements have appropriate data-testid attributes."
+}
